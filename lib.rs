@@ -3,7 +3,7 @@
 #[ink::contract]
 mod erc20 {
 
-    use ink::storage::Mapping;
+    use ink::{storage::Mapping, primitives::AccountId};
 
     #[ink(storage)]
     #[derive(Default)]
@@ -44,24 +44,37 @@ mod erc20 {
 
     impl Erc20 {
         #[ink(constructor)]
-        pub fn new()-> self{}
+        pub fn new() -> self {}
+
         #[ink(message)]
-        pub fn balance_of(){}
+        pub fn balance_of(&self, owner:AccountId) -> Balance {
+            self.balance_of_impl(&owner)
+        }
         #[incline]
-        pub fn balance_of_impl(){}
+        pub fn balance_of_impl(&self, owner:AccountId) -> Balance{
+            self.get(owner).unwrap_or_default()
+        }
+
         #[ink(message)]
-        pub fn allowance(){}
+        pub fn allowance(&mut self,owner:AccountId,spender:AccountId) -> Balance{
+            self.allowance_impl((&owner,&spender))
+        }
         #[incline]
-        pub fn allowance_impl(){}
+        pub fn allowance_impl(&mut self,owner:AccountId, spender:AccountId)-> Balance {
+            self.get((owner,spender)).unwrap_or_default()
+        }
+
+
+
         #[ink(message)]
-        pub fn total_supply(){}
+        pub fn total_supply() {}
         #[ink(message)]
-        pub fn transfer(){}
+        pub fn transfer() {}
         #[ink(message)]
-        pub fn transfer_from_to(){}
+        pub fn transfer_from_to() {}
         #[ink(message)]
-        pub fn transfer_from(){}
+        pub fn transfer_from() {}
         #[ink(message)]
-        pub fn approve(){}
+        pub fn approve() {}
     }
 }
