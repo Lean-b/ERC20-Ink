@@ -3,7 +3,7 @@
 #[ink::contract]
 mod erc20 {
 
-    use ink::{storage::Mapping, primitives::AccountId};
+    use ink::storage::Mapping;
 
     #[ink(storage)]
     #[derive(Default)]
@@ -44,37 +44,101 @@ mod erc20 {
 
     impl Erc20 {
         #[ink(constructor)]
-        pub fn new() -> self {}
+        pub fn new(total_supply: Balance) -> Self {
+            let mut balances = Mapping::default();
+            let caller = Self::env().caller();
+
+            balances.insert(caller, &total_supply);
+
+            Self::env().emit_event(Transfer {
+                from: None,
+                to: Some(caller),
+                value: total_supply,
+            });
+
+            Self {
+                total_supply,
+                balances,
+                allowances: Default::default(),
+            }
+        }
 
         #[ink(message)]
-        pub fn balance_of(&self, owner:AccountId) -> Balance {
+        pub fn balance_of(&self, owner: AccountId) -> Balance {
             self.balance_of_impl(&owner)
         }
-        #[incline]
-        pub fn balance_of_impl(&self, owner:AccountId) -> Balance{
-            self.get(owner).unwrap_or_default()
+        #[inline]
+        pub fn balance_of_impl(&self, owner: &AccountId) -> Balance {
+            self.balances.get(owner).unwrap_or_default()
         }
 
         #[ink(message)]
-        pub fn allowance(&mut self,owner:AccountId,spender:AccountId) -> Balance{
-            self.allowance_impl((&owner,&spender))
-        }
-        #[incline]
-        pub fn allowance_impl(&mut self,owner:AccountId, spender:AccountId)-> Balance {
-            self.get((owner,spender)).unwrap_or_default()
+        pub fn allowance(&mut self, owner: AccountId, spender: AccountId) -> Balance {
+            self.allowance_impl(&owner, &spender)
         }
 
+        #[inline]
+        fn allowance_impl(&self, owner: &AccountId, spender: &AccountId) -> Balance {
+            self.allowances.get((owner, spender)).unwrap_or_default()
+        }
 
+        #[ink(message)]
+        pub fn total_supply(&self) -> Balance {
+            self.total_supply
+        }
 
         #[ink(message)]
-        pub fn total_supply() {}
+        pub fn transfer(&mut self, to: AccountId, value: Balance) -> Result<()> {
+            let from = self.env().caller();
+            self.transfer_from_to(&from, &to, value)
+        }
+        
         #[ink(message)]
-        pub fn transfer() {}
+        pub fn approve(&mut self, spender: &AccountId, value: Balance) -> Result<()> {
+            let owner = self.env().caller();
+            self.allowances.insert((&owner, &spender), &value);
+
+            self.env().emit_event(Approval {
+                owner,
+                spender,
+                value,
+            });
+            Ok(())
+        }
+
         #[ink(message)]
-        pub fn transfer_from_to() {}
+        pub fn transfer_from(
+            &mut self,
+            from: AccountId,
+            to: AccountId,
+            value: Balance,
+        ) -> Result<()> {
+            let caller = self.env().caller();
+            let allowance = self.allowance_impl(&from, &caller);
+            if allowance < value {
+                return Err(Error::InsufficientAllowance);
+            }
+            self.transfer_from_to(&from, &to, &value)?;
+            self.allowances
+                .insert((&from, &caller), &(allowance - value));
+            Ok(())
+        }
+
         #[ink(message)]
-        pub fn transfer_from() {}
-        #[ink(message)]
-        pub fn approve() {}
+        pub fn transfer_from_to(&mut self,from: &AccountId,to: &AccountId,value: Balance,) -> Result<()> {
+            let from_balance = self.balance_of_impl(from);
+            if from_balance < value {
+                return Err(Error::InsufficientBalance);
+            }
+            self.balances.insert(from, &(from_balance - value));
+            let to_balance = self.balance_of_impl(to);
+            self.balances.insert(to, &(to_balance + value));
+            self.env().emit_event(Transfer {
+                from: Some(*from),
+                to: Some(*to),
+                value,
+            });
+            Ok(())
+        }
     }
 }
